@@ -1,0 +1,2 @@
+# nnct-notice-webhook
+新居浜高専のホームページからお知らせを取得しWebhookで送るプログラム
