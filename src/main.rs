@@ -3,11 +3,11 @@ mod discord;
 mod nnct_notice;
 
 use config::get_config;
-use discord::gen_json;
+use discord::gen_msg;
 use nnct_notice::get_notices;
 use reqwest::{
     header::{HeaderValue, CONTENT_TYPE},
-    Client,
+    blocking::Client,
 };
 
 fn main() {
@@ -15,12 +15,18 @@ fn main() {
     let config = get_config("./config.toml").unwrap();
 
     let notices = get_notices(PAGE_URL);
-    let json = gen_json(&config, &notices).unwrap();
-    println!("{}", json);
+    let messages = gen_msg(&config, notices);
     let client = Client::new();
-    let _a = client
-        .post(config.webhook_url)
-        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
-        .body(json)
-        .send();
+    for message in messages {
+        let json = match message.to_json() {
+            Ok(json) => json,
+            Err(_) => continue
+        };
+        println!("{}",json);
+        client
+            .post(&config.webhook_url)
+            .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+            .body(json)
+            .send();
+    }
 }
