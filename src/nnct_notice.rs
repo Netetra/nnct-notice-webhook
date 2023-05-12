@@ -1,5 +1,5 @@
 use markup5ever::rcdom::Handle;
-use reqwest::blocking::{Client, Response};
+use reqwest::blocking::Client;
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::error::Error;
 
@@ -8,7 +8,6 @@ struct Anker {
     href: String,
 }
 
-#[derive(Debug)]
 pub struct Notice {
     pub title: String,
     pub description: Option<String>,
@@ -29,31 +28,40 @@ fn get_root_element(url: &str) -> Result<Handle, Box<dyn Error>> {
     return Ok(root_element);
 }
 
-fn parse_anker<T: NodeExt + QueryBuilderExt>(anker: T) -> Option<Anker> {
+fn get_element_from_class(parent_element: &Handle, class: &str) -> Option<Handle> {
+    let element = parent_element.class(class).find()?.get_handle();
+    return Some(element)
+}
+
+fn get_element_all_from_tag(parent_element: &Handle, tag: &str) -> Vec<Handle> {
+    return parent_element.tag(tag).find_all()
+        .map(|element| element.get_handle()).collect::<Vec<_>>();
+}
+
+// fn get_notice_section(root_element: Handle) -> Option<Handle> {
+//     let section = root_element
+//         .class("home-main-news-con")
+//         .find()?
+//         .get_handle();
+//     return Some(section);
+// }
+
+fn parse_anker(anker: Handle) -> Option<Anker> {
     let content = anker.text();
     let href = anker.get("href")?;
     return Some(Anker { content, href });
 }
 
-fn get_notice_ankers(root_element: Handle) -> Vec<Anker> {
-    return root_element
-        .class("home-main-news-con")
-        .find()
-        .unwrap()
-        .tag("a")
-        .find_all()
-        .map(|anker| parse_anker(anker))
-        .flatten()
-        .collect::<Vec<_>>();
-}
+// fn get_ankers(section: &Handle) -> Vec<Anker> {
+//     return section
+//         .tag("a")
+//         .find_all()
+//         .map(|anker| parse_anker(anker))
+//         .flatten()
+//         .collect::<Vec<_>>();
+// }
 
-fn _post_json(url: &str, json: String) -> Response {
-    let client = Client::new();
-    let response = client.post(url).body(json).send().unwrap();
-    return response;
-}
-
-fn join_notice_content(content_element: Handle) -> String {
+fn join_content(content_element: &Handle) -> String {
     return content_element
         .tag("p")
         .find_all()
@@ -62,29 +70,33 @@ fn join_notice_content(content_element: Handle) -> String {
         .join("\n");
 }
 
-fn get_notice_content(url: &str) -> Option<String> {
-    let root_element = match get_root_element(url) {
-        Ok(element) => Some(element),
-        Err(_) => None,
-    }?;
+fn get_content(root_element: &Handle) -> Option<String> {
     let content_element = root_element.class("main-con").find()?;
-    let content = join_notice_content(content_element);
+    let content = join_content(&content_element);
     return Some(content);
 }
 
-pub fn get_notices(url: &str) -> Vec<Notice> {
-    let root_element = get_root_element(url).unwrap();
-    let ankers = get_notice_ankers(root_element);
+pub fn get_notices(url: &str) -> Result<Vec<Notice>, Box<dyn Error>> {
+    let root_element = get_root_element(url)?;
+    let notice_section = get_element_from_class(&root_element, "home-main-news-con");
+    let ankers = get_element_all_from_tag(&notice_section, "a")
+        .into_iter().map(|anker| parse_anker(anker))
+        .flatten().collect::<Vec<_>>();
     let notices = ankers
         .into_iter()
         .map(|anker| {
             let content_url = url.to_string() + &anker.href;
-            return Notice {
-                title: anker.content,
-                description: get_notice_content(&content_url),
-                url: content_url,
+            let content_root_element = match get_root_element(&content_url) {
+                Ok(element) => element,
+                Err(_) => return None
             };
+            return Some(Notice {
+                title: anker.content,
+                description: get_content(&content_root_element),
+                url: content_url,
+            });
         })
+        .flatten()
         .collect::<Vec<_>>();
-    return notices;
+    return Ok(notices);
 }
