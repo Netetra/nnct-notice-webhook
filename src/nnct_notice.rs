@@ -1,5 +1,6 @@
 use markup5ever::rcdom::Handle;
 use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use soup::{NodeExt, QueryBuilderExt, Soup};
 use std::error::Error;
 
@@ -8,6 +9,7 @@ struct Anker {
     href: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct Notice {
     pub title: String,
     pub description: Option<String>,
